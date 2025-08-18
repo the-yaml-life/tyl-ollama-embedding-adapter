@@ -443,9 +443,7 @@ impl OllamaEmbeddingService {
             .send()
             .await
             .map_err(|e| {
-                embedding_errors::generation_failed(format!(
-                    "Failed to pull model {model}: {e}"
-                ))
+                embedding_errors::generation_failed(format!("Failed to pull model {model}: {e}"))
             })?;
 
         if !response.status().is_success() {
@@ -589,9 +587,7 @@ impl EmbeddingService for OllamaEmbeddingService {
             }
 
             let api_response: serde_json::Value = response.json().await.map_err(|e| {
-                embedding_errors::generation_failed(format!(
-                    "Failed to parse Ollama response: {e}"
-                ))
+                embedding_errors::generation_failed(format!("Failed to parse Ollama response: {e}"))
             })?;
 
             // Extract single embedding
