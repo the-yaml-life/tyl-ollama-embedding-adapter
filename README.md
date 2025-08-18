@@ -1,135 +1,239 @@
-# TYL Module Template
+# TYL Ollama Embedding Adapter
 
-🏗️ **Template repository for creating new TYL framework modules**
+🧠 **Ollama embedding adapter for TYL framework with batch processing and content-type optimization**
 
-This template provides a complete foundation for building hexagonal architecture modules in the TYL framework ecosystem.
+This module provides a complete Ollama integration for the TYL framework's embedding port, enabling local embedding generation with automatic model optimization and efficient batch processing.
+
+[![Crates.io](https://img.shields.io/crates/v/tyl-ollama-embedding-adapter.svg)](https://crates.io/crates/tyl-ollama-embedding-adapter)
+[![Documentation](https://docs.rs/tyl-ollama-embedding-adapter/badge.svg)](https://docs.rs/tyl-ollama-embedding-adapter)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](https://opensource.org/licenses/AGPL-3.0)
+
+## ✨ Features
+
+- **🚀 Batch Processing**: Automatic chunking for large requests with dimension validation
+- **🎯 Content-Type Optimization**: Different models for code vs. text using ContentType enum
+- **🔧 Ollama Integration**: Native support for Ollama embedding API with auto model pulling
+- **📊 Health Monitoring**: Built-in health checks and model availability verification
+- **⚙️ TYL Framework Integration**: Full integration with TYL error handling, config, logging, and tracing
+- **🏗️ Hexagonal Architecture**: Clean separation between port interface and Ollama adapter
 
 ## 🚀 Quick Start
 
-### 1. Use This Template
-Click "Use this template" button on GitHub or:
+### Add to Your Project
+
+```toml
+[dependencies]
+tyl-ollama-embedding-adapter = { git = "https://github.com/the-yaml-life/tyl-ollama-embedding-adapter.git" }
+tyl-embeddings-port = { git = "https://github.com/the-yaml-life/tyl-embeddings-port.git" }
+tokio = { version = "1.0", features = ["full"] }
+```
+
+### Basic Usage
+
+```rust
+use tyl_ollama_embedding_adapter::{OllamaEmbeddingService, OllamaConfig};
+use tyl_embeddings_port::{EmbeddingService, ContentType};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create Ollama embedding service with default configuration
+    let config = OllamaConfig::default(); // Connects to localhost:11434
+    let service = OllamaEmbeddingService::from_config(config).await?;
+
+    // Generate embeddings with content-type optimization
+    let code_embedding = service.generate_embedding(
+        "fn main() { println!(\"Hello, world!\"); }", 
+        ContentType::Code  // Automatically uses optimized model for code
+    ).await?;
+
+    let text_embedding = service.generate_embedding(
+        "This is a documentation example.", 
+        ContentType::Documentation  // Uses text-optimized model
+    ).await?;
+
+    println!("Code embedding: {} dimensions", code_embedding.dimensions());
+    println!("Text embedding: {} dimensions", text_embedding.dimensions());
+
+    Ok(())
+}
+```
+
+### Batch Processing
+
+```rust
+use tyl_embeddings_port::BatchEmbeddingRequest;
+use std::collections::HashMap;
+
+// Process multiple texts efficiently
+let batch_request = BatchEmbeddingRequest {
+    texts: vec![
+        "First document to embed".to_string(),
+        "Second document for processing".to_string(),
+        "Third piece of content".to_string(),
+    ],
+    content_type: ContentType::Documentation,
+    model_override: None, // Uses content-type optimized model
+    metadata: HashMap::new(),
+};
+
+let batch_response = service.generate_batch(batch_request).await?;
+println!("Generated {} embeddings", batch_response.embeddings.len());
+```
+
+## 🔧 Configuration
+
+### Environment Variables
+
+Configure Ollama connection and behavior:
+
 ```bash
-gh repo create the-yaml-life/tyl-your-module --template the-yaml-life/tyl-module-template --public
+# Ollama server configuration
+export TYL_OLLAMA_HOST=localhost
+export TYL_OLLAMA_PORT=11434
+
+# Model configuration
+export TYL_OLLAMA_CODE_MODEL=codellama:7b
+export TYL_OLLAMA_TEXT_MODEL=nomic-embed-text:latest
+export TYL_OLLAMA_AVAILABLE_MODELS=nomic-embed-text:latest,codellama:7b
+
+# Performance settings
+export TYL_OLLAMA_CONNECTION_POOL_SIZE=10
+export TYL_OLLAMA_RETRY_ATTEMPTS=3
+export TYL_OLLAMA_AUTO_PULL_MODELS=true
 ```
 
-### 2. Replace Placeholders
-Search and replace the following placeholders throughout the codebase:
+### Custom Configuration
 
-- `{module-name}` → your module name (e.g., `cache`, `config`)
-- `{module_name}` → snake_case version (e.g., `cache`, `config`) 
-- `{MainTrait}` → your main trait name (e.g., `CacheManager`, `ConfigLoader`)
-- `{MainType}` → your main type name (e.g., `CacheConfig`, `ConfigSettings`)
-- `{BasicAdapter}` → your adapter name (e.g., `MemoryCache`, `EnvConfig`)
-- `{Module}` → PascalCase module name (e.g., `Cache`, `Config`)
-- `{Module Name}` → Human readable name (e.g., `Cache Management`, `Configuration`)
+```rust
+let mut config = OllamaConfig::default();
 
-### 3. Update Package Metadata
-Edit `Cargo.toml`:
-- Update `name`, `description`, `keywords`, `categories`
-- Set correct repository URLs
-- Adjust dependencies for your module
+// Configure remote Ollama server
+config.host = "remote-ollama-server".to_string();
+config.port = 11434;
 
-### 4. Implement Your Module
-- Define your port (trait) in `src/lib.rs`
-- Implement adapters
-- Add comprehensive tests
-- Update documentation
+// Customize model mapping
+config.model_mapping.insert("code".to_string(), "custom-code-model:latest".to_string());
+config.model_mapping.insert("text".to_string(), "custom-text-model:latest".to_string());
 
-## 📁 What's Included
+// Performance tuning
+config.connection_pool_size = 20;
+config.auto_pull_models = false; // Disable auto-pulling in production
 
-### ✅ **Complete Structure**
-```
-tyl-module-template/
-├── src/lib.rs                 # Core implementation with hexagonal architecture
-├── examples/basic_usage.rs    # Usage examples
-├── tests/integration_tests.rs # Integration tests
-├── .github/workflows/         # CI/CD pipelines
-│   ├── ci.yml                # Tests, clippy, fmt, security audit
-│   └── release.yml           # Automated releases
-├── Cargo.toml                # Package configuration
-├── README.md                 # Documentation template
-├── CLAUDE.md                 # Claude Code context
-├── CHANGELOG.md              # Version history
-├── LICENSE                   # AGPL-3.0 license
-├── .gitignore               # Git ignore rules
-├── rustfmt.toml             # Code formatting config
-└── clippy.toml              # Linting configuration
+let service = OllamaEmbeddingService::from_config(config).await?;
 ```
 
-### ✅ **Built-in Features**
-- 🏛️ **Hexagonal Architecture** - Clean ports and adapters pattern
-- 🧪 **TDD Ready** - Test structure following TDD principles
-- 📖 **Documentation** - Complete docs with examples
-- ⚙️ **CI/CD** - GitHub Actions for testing and releases
-- 🔒 **Quality Gates** - Clippy, rustfmt, security audit
-- 📦 **Serialization** - Serde support built-in
-- 🎯 **Error Handling** - Comprehensive error types with thiserror
-- 🔧 **Branch Protection** - Configured for team development
+## 📊 Content-Type Optimization
+
+The adapter automatically selects optimal models based on content type:
+
+| Content Type | Default Model | Use Case |
+|--------------|---------------|----------|
+| `Code` | `codellama:7b` | Source code, technical content |
+| `Documentation` | `nomic-embed-text:latest` | User docs, explanations |
+| `Query` | `nomic-embed-text:latest` | Search terms, user queries |
+| `Task` | `codellama:7b` | Task descriptions, requirements |
+| `Memory` | `nomic-embed-text:latest` | Memory content, notes |
+| `General` | `nomic-embed-text:latest` | Default text content |
+
+## 🧪 Testing
+
+### Unit Tests
+```bash
+cargo test --lib
+```
+
+### Integration Tests (Requires Ollama)
+```bash
+# Start Ollama server first
+ollama serve
+
+# Run integration tests
+cargo test --test integration_tests
+```
+
+### Example Usage
+```bash
+cargo run --example basic_usage
+```
 
 ## 🏗️ Architecture
 
-Follows hexagonal architecture principles:
+This module follows hexagonal architecture:
 
-```rust
-// Port (Interface)
-trait YourTrait {
-    fn operation(&self, input: &str) -> YourResult<String>;
-}
+- **Port (Interface)**: `EmbeddingService` from `tyl-embeddings-port`
+- **Adapter**: `OllamaEmbeddingService` - Ollama-specific implementation
+- **Configuration**: `OllamaConfig` with TYL framework integration
+- **Domain Logic**: Content-type optimization and batch processing
 
-// Adapter (Implementation)  
-struct YourAdapter {
-    config: YourConfig,
-}
-
-impl YourTrait for YourAdapter {
-    fn operation(&self, input: &str) -> YourResult<String> {
-        // Implementation
-    }
-}
+```
+┌─────────────────────────────────────────────┐
+│              Application Layer              │
+│  (Your code using EmbeddingService trait)   │
+└─────────────────┬───────────────────────────┘
+                  │
+┌─────────────────▼───────────────────────────┐
+│           EmbeddingService Port             │
+│        (trait from tyl-embeddings-port)     │
+└─────────────────┬───────────────────────────┘
+                  │
+┌─────────────────▼───────────────────────────┐
+│         OllamaEmbeddingService              │
+│              (this adapter)                 │
+└─────────────────┬───────────────────────────┘
+                  │
+┌─────────────────▼───────────────────────────┐
+│              Ollama API                     │
+│         (localhost:11434/api/embeddings)    │
+└─────────────────────────────────────────────┘
 ```
 
-## 🧪 Testing Strategy
+## 🚀 Performance
 
-### **TDD Approach**
-1. Write failing tests first
-2. Implement minimal code to pass
-3. Refactor and improve
+### Benchmarks (nomic-embed-text:latest on localhost)
 
-### **Test Coverage**
-- Unit tests in `src/lib.rs`
-- Integration tests in `tests/`
-- Doc tests in documentation
-- Example tests via CI
+- **Single embedding**: ~65ms average
+- **Batch of 5 texts**: ~200ms average  
+- **Dimensions**: 768 (nomic-embed-text)
+- **Max batch size**: 50 (configurable)
 
-## 📝 Checklist After Using Template
+### Optimization Tips
 
-- [ ] Replace all placeholder text
-- [ ] Update `Cargo.toml` metadata
-- [ ] Implement your trait and types
-- [ ] Add comprehensive tests
-- [ ] Update documentation
-- [ ] Configure repository settings
-- [ ] Set up branch protection
-- [ ] Add GitHub topics
+1. **Use batch processing** for multiple texts
+2. **Configure connection pooling** for high throughput
+3. **Pre-pull models** to avoid download delays
+4. **Use content-type optimization** for better quality
 
-## 🎯 TYL Framework Standards
+## 🔗 Related TYL Modules
 
-This template ensures your module follows TYL framework standards:
-
-- ✅ Hexagonal architecture
-- ✅ Extensible design without core modifications  
-- ✅ Comprehensive error handling
-- ✅ Full test coverage
-- ✅ Complete documentation
-- ✅ CI/CD automation
-- ✅ Security best practices
-
-## 🔗 Related
-
-- [TYL Framework Documentation](https://github.com/the-yaml-life)
+- [`tyl-embeddings-port`](https://github.com/the-yaml-life/tyl-embeddings-port) - Embedding port interface
 - [`tyl-errors`](https://github.com/the-yaml-life/tyl-errors) - Error handling
-- [`tyl-logging`](https://github.com/the-yaml-life/tyl-logging) - Structured logging
+- [`tyl-config`](https://github.com/the-yaml-life/tyl-config) - Configuration management
+- [`tyl-logging`](https://github.com/the-yaml-life/tyl-logging) - Structured logging  
+- [`tyl-tracing`](https://github.com/the-yaml-life/tyl-tracing) - Distributed tracing
+
+## 📝 Requirements
+
+- **Rust**: 1.70+ (2021 edition)
+- **Ollama**: Latest version running locally or remotely
+- **Models**: At least `nomic-embed-text:latest` for basic functionality
+
+## 🤝 Contributing
+
+See [CLAUDE.md](CLAUDE.md) for development context and patterns.
+
+1. Fork the repository
+2. Create a feature branch
+3. Write tests first (TDD)
+4. Implement the feature
+5. Ensure all tests pass
+6. Submit a pull request
 
 ## 📄 License
 
-AGPL-3.0 - See [LICENSE](LICENSE) for details.
+This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- [Ollama](https://ollama.ai/) for the excellent local LLM platform
+- [TYL Framework](https://github.com/the-yaml-life) for hexagonal architecture patterns
+- The Rust community for amazing ecosystem tools

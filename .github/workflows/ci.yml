@@ -55,6 +55,7 @@ jobs:
       run: |
         cargo check --examples
         cargo run --example basic_usage
+        # Note: Integration tests require Ollama server, run separately
 
   security_audit:
     name: Security Audit
