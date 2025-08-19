@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use tyl_embeddings_port::{BatchEmbeddingRequest, ContentType, EmbeddingService};
 use tyl_ollama_embedding_adapter::{OllamaConfig, OllamaEmbeddingService};
-use wiremock::{MockServer, Mock, ResponseTemplate};
 use wiremock::matchers::{method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 /// Integration tests for Ollama embedding adapter
 /// These tests work in two modes:
@@ -21,7 +21,7 @@ async fn is_ollama_available() -> bool {
 /// Set up mock Ollama server for CI
 async fn setup_mock_ollama() -> MockServer {
     let mock_server = MockServer::start().await;
-    
+
     // Mock /api/tags endpoint (model list)
     Mock::given(method("GET"))
         .and(path("/api/tags"))
@@ -37,7 +37,7 @@ async fn setup_mock_ollama() -> MockServer {
         })))
         .mount(&mock_server)
         .await;
-    
+
     // Mock /api/embeddings endpoint
     Mock::given(method("POST"))
         .and(path("/api/embeddings"))
@@ -46,7 +46,7 @@ async fn setup_mock_ollama() -> MockServer {
         })))
         .mount(&mock_server)
         .await;
-    
+
     mock_server
 }
 
@@ -74,8 +74,11 @@ async fn create_test_config() -> (OllamaConfig, Option<MockServer>) {
 async fn test_ollama_connectivity_ishtar() {
     // TDD: Test basic connectivity to Ollama (real or mock)
     let (config, _mock_server) = create_test_config().await;
-    
-    println!("Testing connectivity to Ollama at: {}", config.base.service_url);
+
+    println!(
+        "Testing connectivity to Ollama at: {}",
+        config.base.service_url
+    );
 
     let service = OllamaEmbeddingService::from_config(config)
         .await
@@ -84,9 +87,11 @@ async fn test_ollama_connectivity_ishtar() {
     println!("✅ Successfully connected to Ollama");
 
     // Test health check
-    let health = service.health_check().await
+    let health = service
+        .health_check()
+        .await
         .expect("Health check should succeed");
-    
+
     println!("Health check status: {:?}", health.status);
     assert!(health.status.is_healthy(), "Ollama should be healthy");
 }
