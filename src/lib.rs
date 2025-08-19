@@ -55,24 +55,24 @@
 pub use tyl_embeddings_port::{
     // Error helpers
     embedding_errors,
+    // Core types
     BatchEmbeddingRequest,
     BatchEmbeddingResponse,
-    ConfigPlugin,
-    ConfigResult,
     ContentType,
     Embedding,
-    // Configuration
-    EmbeddingConfig,
-    EmbeddingProvider,
     EmbeddingResult,
-    // Core trait and types
+    // Core trait
     EmbeddingService,
+    // Health monitoring
     HealthCheckResult,
     HealthStatus,
     // Re-exports from TYL framework
     TylError,
     TylResult,
 };
+
+// Import configuration functionality from tyl-config directly
+pub use tyl_config::{ConfigPlugin, ConfigResult};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -81,6 +81,122 @@ use std::time::Duration;
 use tyl_logging::{JsonLogger, LogLevel, LogRecord, Logger};
 use tyl_tracing::TracingManager;
 use tyl_tracing::{SimpleTracer, TraceConfig};
+
+/// Embedding providers for adapter configuration
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum EmbeddingProvider {
+    /// OpenAI embedding API
+    OpenAI,
+    /// Cohere embedding API
+    Cohere,
+    /// HuggingFace embedding API
+    HuggingFace,
+    /// Local embedding service (Ollama)
+    #[default]
+    Local,
+}
+
+/// Base embedding configuration for adapters
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmbeddingConfig {
+    /// Service URL for API calls
+    pub service_url: String,
+    /// Model name to use
+    pub model: String,
+    /// API key (optional for local services)
+    pub api_key: Option<String>,
+    /// Request timeout in seconds
+    pub timeout_seconds: u64,
+    /// Maximum batch size for bulk operations
+    pub max_batch_size: usize,
+    /// Cache TTL in seconds
+    pub cache_ttl_seconds: u64,
+    /// Maximum cache capacity
+    pub cache_max_capacity: usize,
+    /// Provider type
+    pub provider: EmbeddingProvider,
+}
+
+impl Default for EmbeddingConfig {
+    fn default() -> Self {
+        Self {
+            service_url: "http://localhost:11434".to_string(),
+            model: "nomic-embed-text:latest".to_string(),
+            api_key: None,
+            timeout_seconds: 60,
+            max_batch_size: 50,
+            cache_ttl_seconds: 3600,
+            cache_max_capacity: 10000,
+            provider: EmbeddingProvider::Local,
+        }
+    }
+}
+
+impl ConfigPlugin for EmbeddingConfig {
+    fn name(&self) -> &'static str {
+        "embedding"
+    }
+
+    fn env_prefix(&self) -> &'static str {
+        "TYL_EMBEDDING"
+    }
+
+    fn validate(&self) -> ConfigResult<()> {
+        if self.service_url.is_empty() {
+            return Err(TylError::validation(
+                "service_url",
+                "Service URL cannot be empty",
+            ));
+        }
+
+        if self.timeout_seconds == 0 {
+            return Err(TylError::validation(
+                "timeout_seconds",
+                "Timeout must be greater than 0",
+            ));
+        }
+
+        if self.max_batch_size == 0 {
+            return Err(TylError::validation(
+                "max_batch_size",
+                "Max batch size must be greater than 0",
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn load_from_env(&self) -> ConfigResult<Self> {
+        let mut config = Self::default();
+        config.merge_env()?;
+        Ok(config)
+    }
+
+    fn merge_env(&mut self) -> ConfigResult<()> {
+        // Service URL
+        if let Ok(url) = std::env::var("TYL_EMBEDDING_SERVICE_URL") {
+            self.service_url = url;
+        } else if let Ok(url) = std::env::var("EMBEDDING_SERVICE_URL") {
+            self.service_url = url;
+        }
+
+        // Model
+        if let Ok(model) = std::env::var("TYL_EMBEDDING_MODEL") {
+            self.model = model;
+        } else if let Ok(model) = std::env::var("EMBEDDING_MODEL") {
+            self.model = model;
+        }
+
+        // API Key
+        if let Ok(key) = std::env::var("TYL_EMBEDDING_API_KEY") {
+            self.api_key = Some(key);
+        } else if let Ok(key) = std::env::var("EMBEDDING_API_KEY") {
+            self.api_key = Some(key);
+        }
+
+        Ok(())
+    }
+}
 
 /// Ollama-specific configuration extending EmbeddingConfig
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -718,11 +834,6 @@ impl EmbeddingService for OllamaEmbeddingService {
     fn supported_models(&self) -> Vec<String> {
         // TDD: Function must return list of configured models
         self.config.model_mapping.values().cloned().collect()
-    }
-
-    /// Get service configuration
-    fn config(&self) -> &EmbeddingConfig {
-        &self.config.base
     }
 }
 
