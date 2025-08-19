@@ -1,52 +1,105 @@
 use std::collections::HashMap;
 use tyl_embeddings_port::{BatchEmbeddingRequest, ContentType, EmbeddingService};
 use tyl_ollama_embedding_adapter::{OllamaConfig, OllamaEmbeddingService};
+use wiremock::{MockServer, Mock, ResponseTemplate};
+use wiremock::matchers::{method, path};
 
 /// Integration tests for Ollama embedding adapter
-/// These tests require Ollama to be running on ishtar:11434 with nomic-embed-text:latest model
+/// These tests work in two modes:
+/// 1. If Ollama is available on ishtar:11434 -> Use real Ollama
+/// 2. If Ollama is not available (CI) -> Use mock server
+
+/// Check if real Ollama is available on ishtar
+async fn is_ollama_available() -> bool {
+    let client = reqwest::Client::new();
+    match client.get("http://ishtar:11434/api/tags").send().await {
+        Ok(response) => response.status().is_success(),
+        Err(_) => false,
+    }
+}
+
+/// Set up mock Ollama server for CI
+async fn setup_mock_ollama() -> MockServer {
+    let mock_server = MockServer::start().await;
+    
+    // Mock /api/tags endpoint (model list)
+    Mock::given(method("GET"))
+        .and(path("/api/tags"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "models": [
+                {
+                    "name": "nomic-embed-text:latest",
+                    "modified_at": "2024-01-01T00:00:00Z",
+                    "size": 274301056,
+                    "digest": "mock-digest"
+                }
+            ]
+        })))
+        .mount(&mock_server)
+        .await;
+    
+    // Mock /api/embeddings endpoint
+    Mock::given(method("POST"))
+        .and(path("/api/embeddings"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "embedding": vec![0.1; 768] // Mock 768-dimensional embedding
+        })))
+        .mount(&mock_server)
+        .await;
+    
+    mock_server
+}
+
+/// Create appropriate config (real Ollama or mock)
+async fn create_test_config() -> (OllamaConfig, Option<MockServer>) {
+    if is_ollama_available().await {
+        println!("🚀 Using real Ollama on ishtar:11434");
+        let mut config = OllamaConfig::default();
+        config.host = "ishtar".to_string();
+        config.port = 11434;
+        config.base.service_url = format!("http://{}:{}", config.host, config.port);
+        config.auto_pull_models = false;
+        (config, None)
+    } else {
+        println!("🤖 Using mock Ollama server for CI");
+        let mock_server = setup_mock_ollama().await;
+        let mut config = OllamaConfig::default();
+        config.base.service_url = mock_server.uri();
+        config.auto_pull_models = false;
+        (config, Some(mock_server))
+    }
+}
 
 #[tokio::test]
 async fn test_ollama_connectivity_ishtar() {
-    // TDD: Test basic connectivity to Ollama on ishtar
-    let mut config = OllamaConfig::default();
-    config.host = "ishtar".to_string();
-    config.port = 11434;
-    config.base.service_url = format!("http://{}:{}", config.host, config.port);
-    config.auto_pull_models = false; // Don't auto-pull in tests
+    // TDD: Test basic connectivity to Ollama (real or mock)
+    let (config, _mock_server) = create_test_config().await;
+    
+    println!("Testing connectivity to Ollama at: {}", config.base.service_url);
 
-    println!(
-        "Testing connectivity to Ollama at: {}",
-        config.base.service_url
-    );
+    let service = OllamaEmbeddingService::from_config(config)
+        .await
+        .expect("Should connect to Ollama (real or mock)");
 
-    match OllamaEmbeddingService::from_config(config).await {
-        Ok(service) => {
-            println!("✅ Successfully connected to Ollama on ishtar");
+    println!("✅ Successfully connected to Ollama");
 
-            // Test health check
-            let health = service.health_check().await.unwrap();
-            println!("Health check status: {:?}", health.status);
-            assert!(health.status.is_healthy(), "Ollama should be healthy");
-        }
-        Err(e) => {
-            panic!("❌ Failed to connect to Ollama on ishtar: {}\nMake sure Ollama is running on ishtar:11434", e);
-        }
-    }
+    // Test health check
+    let health = service.health_check().await
+        .expect("Health check should succeed");
+    
+    println!("Health check status: {:?}", health.status);
+    assert!(health.status.is_healthy(), "Ollama should be healthy");
 }
 
 #[tokio::test]
 async fn test_nomic_embed_text_model_available() {
     // TDD: Test that nomic-embed-text:latest model is available
-    let mut config = OllamaConfig::default();
-    config.host = "ishtar".to_string();
-    config.port = 11434;
-    config.base.service_url = format!("http://{}:{}", config.host, config.port);
+    let (mut config, _mock_server) = create_test_config().await;
     config.base.model = "nomic-embed-text:latest".to_string();
-    config.auto_pull_models = false;
 
     let service = OllamaEmbeddingService::from_config(config)
         .await
-        .expect("Should connect to Ollama on ishtar");
+        .expect("Should connect to Ollama (real or mock)");
 
     // Check if the specific model is available
     let available = service
@@ -63,17 +116,13 @@ async fn test_nomic_embed_text_model_available() {
 
 #[tokio::test]
 async fn test_single_embedding_generation_ishtar() {
-    // TDD: Test single embedding generation with real Ollama
-    let mut config = OllamaConfig::default();
-    config.host = "ishtar".to_string();
-    config.port = 11434;
-    config.base.service_url = format!("http://{}:{}", config.host, config.port);
+    // TDD: Test single embedding generation (real Ollama or mock)
+    let (mut config, _mock_server) = create_test_config().await;
     config.base.model = "nomic-embed-text:latest".to_string();
-    config.auto_pull_models = false;
 
     let service = OllamaEmbeddingService::from_config(config)
         .await
-        .expect("Should connect to Ollama on ishtar");
+        .expect("Should connect to Ollama (real or mock)");
 
     let test_text = "This is a test sentence for embedding generation.";
     println!("Generating embedding for: \"{}\"", test_text);
