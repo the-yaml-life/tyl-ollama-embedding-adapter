@@ -157,11 +157,7 @@ async fn test_single_embedding_generation_ishtar() {
 #[tokio::test]
 async fn test_content_type_optimization_ishtar() {
     // TDD: Test content-type optimization with different text types
-    let mut config = OllamaConfig::default();
-    config.host = "ishtar".to_string();
-    config.port = 11434;
-    config.base.service_url = format!("http://{}:{}", config.host, config.port);
-    config.auto_pull_models = false;
+    let (mut config, _mock_server) = create_test_config().await;
 
     // Override model mapping to use only available model
     config
@@ -218,14 +214,10 @@ async fn test_content_type_optimization_ishtar() {
 
 #[tokio::test]
 async fn test_batch_processing_ishtar() {
-    // TDD: Test batch processing with real Ollama
-    let mut config = OllamaConfig::default();
-    config.host = "ishtar".to_string();
-    config.port = 11434;
-    config.base.service_url = format!("http://{}:{}", config.host, config.port);
+    // TDD: Test batch processing (real Ollama or mock)
+    let (mut config, _mock_server) = create_test_config().await;
     config.base.model = "nomic-embed-text:latest".to_string();
     config.base.max_batch_size = 10; // Small batch for testing
-    config.auto_pull_models = false;
 
     let service = OllamaEmbeddingService::from_config(config)
         .await
@@ -289,11 +281,8 @@ async fn test_batch_processing_ishtar() {
 
 #[tokio::test]
 async fn test_model_dimensions_detection_ishtar() {
-    // TDD: Test model dimension detection for nomic-embed-text
-    let mut config = OllamaConfig::default();
-    config.host = "ishtar".to_string();
-    config.port = 11434;
-    config.base.service_url = format!("http://{}:{}", config.host, config.port);
+    // TDD: Test model dimension detection for nomic-embed-text (real Ollama or mock)
+    let (config, _mock_server) = create_test_config().await;
 
     let service = OllamaEmbeddingService::from_config(config)
         .await
@@ -315,11 +304,8 @@ async fn test_model_dimensions_detection_ishtar() {
 
 #[tokio::test]
 async fn test_supported_models_ishtar() {
-    // TDD: Test that supported models list is accurate
-    let mut config = OllamaConfig::default();
-    config.host = "ishtar".to_string();
-    config.port = 11434;
-    config.base.service_url = format!("http://{}:{}", config.host, config.port);
+    // TDD: Test that supported models list is accurate (real Ollama or mock)
+    let (config, _mock_server) = create_test_config().await;
 
     let service = OllamaEmbeddingService::from_config(config)
         .await
@@ -337,11 +323,8 @@ async fn test_supported_models_ishtar() {
 
 #[tokio::test]
 async fn test_error_handling_ishtar() {
-    // TDD: Test error handling with invalid configurations
-    let mut config = OllamaConfig::default();
-    config.host = "ishtar".to_string();
-    config.port = 11434;
-    config.base.service_url = format!("http://{}:{}", config.host, config.port);
+    // TDD: Test error handling with invalid configurations (real Ollama or mock)
+    let (config, _mock_server) = create_test_config().await;
 
     let service = OllamaEmbeddingService::from_config(config)
         .await
@@ -374,15 +357,17 @@ async fn test_error_handling_ishtar() {
 // Helper test to verify ishtar connectivity before running other tests
 #[tokio::test]
 async fn test_ishtar_connectivity_prerequisite() {
-    // TDD: Basic connectivity test that other tests depend on
+    // TDD: Basic connectivity test that other tests depend on (real Ollama or mock)
+    let (config, _mock_server) = create_test_config().await;
+    
+    println!("Testing basic HTTP connectivity to {}...", config.base.service_url);
+    
     let client = reqwest::Client::new();
-    let url = "http://ishtar:11434/api/tags";
+    let url = format!("{}/api/tags", config.base.service_url);
 
-    println!("Testing basic HTTP connectivity to ishtar:11434...");
-
-    match client.get(url).send().await {
+    match client.get(&url).send().await {
         Ok(response) => {
-            println!("✅ HTTP connection to ishtar:11434 successful");
+            println!("✅ HTTP connection to {} successful", config.base.service_url);
             println!("   Status: {}", response.status());
 
             if response.status().is_success() {
@@ -400,8 +385,8 @@ async fn test_ishtar_connectivity_prerequisite() {
         }
         Err(e) => {
             panic!(
-                "❌ Cannot connect to ishtar:11434: {}\nMake sure Ollama is running on ishtar",
-                e
+                "❌ Cannot connect to {}: {}\nService should be available (real or mock)",
+                config.base.service_url, e
             );
         }
     }
