@@ -359,15 +359,21 @@ async fn test_error_handling_ishtar() {
 async fn test_ishtar_connectivity_prerequisite() {
     // TDD: Basic connectivity test that other tests depend on (real Ollama or mock)
     let (config, _mock_server) = create_test_config().await;
-    
-    println!("Testing basic HTTP connectivity to {}...", config.base.service_url);
-    
+
+    println!(
+        "Testing basic HTTP connectivity to {}...",
+        config.base.service_url
+    );
+
     let client = reqwest::Client::new();
     let url = format!("{}/api/tags", config.base.service_url);
 
     match client.get(&url).send().await {
         Ok(response) => {
-            println!("✅ HTTP connection to {} successful", config.base.service_url);
+            println!(
+                "✅ HTTP connection to {} successful",
+                config.base.service_url
+            );
             println!("   Status: {}", response.status());
 
             if response.status().is_success() {
